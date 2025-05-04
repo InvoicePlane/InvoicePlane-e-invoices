@@ -525,8 +525,10 @@ class Facturxv10Xml extends BaseXml
 
         // SpecifiedTradeProduct
         $tradeNode = $this->doc->createElement('ram:SpecifiedTradeProduct');
-        $itemdesc = $item->item_description ? "\n" . htmlsc($item->item_description) : '';
-        $tradeNode->appendChild($this->doc->createElement('ram:Name', htmlsc($item->item_name) . $itemdesc));
+        $tradeNode->appendChild($this->doc->createElement('ram:Name', htmlsc($item->item_name)));
+        if ($item->item_description) {
+            $tradeNode->appendChild($this->doc->createElement('ram:Description', htmlsc($item->item_description)));
+        }
         $node->appendChild($tradeNode);
 
         // SpecifiedLineTradeAgreement
