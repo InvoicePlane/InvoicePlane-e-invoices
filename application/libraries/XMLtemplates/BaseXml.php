@@ -33,6 +33,9 @@ class BaseXml extends stdClass
 
     public $root;
 
+    /**
+     * @var bool
+     */
     public $notax;
 
     public $options = [];
@@ -46,7 +49,7 @@ class BaseXml extends stdClass
 
     public $itemsSubtotalGroupedByTaxPercent = [];
 
-    public function __construct($params)
+    public function __construct(array $params)
     {
         $this->invoice            = $params['invoice'];
         $this->items              = $params['items'];
@@ -138,13 +141,13 @@ class BaseXml extends stdClass
         return '';
     }
 
-    public function formattedFloat($amount, $nb_decimals = 2)
+    public function formattedFloat($amount, $nb_decimals = 2): string
     {
-        return number_format(floatval($amount), $nb_decimals, '.', '');
+        return number_format((float) $amount, $nb_decimals, '.', '');
     }
 
-    public function formattedQuantity($qty)
+    public function formattedQuantity($qty): string
     {
-        return number_format(floatval($qty), $this->item_decimals, '.', '');
+        return number_format((float) $qty, $this->item_decimals, '.', '');
     }
 }

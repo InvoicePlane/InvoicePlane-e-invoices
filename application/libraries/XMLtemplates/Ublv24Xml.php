@@ -19,7 +19,7 @@ include_once __DIR__ . '/BaseXml.php'; // ! important
 
 class Ublv24Xml extends BaseXml
 {
-    public function __construct($params)
+    public function __construct(array $params)
     {
         parent::__construct($params);
     }
@@ -141,7 +141,7 @@ class Ublv24Xml extends BaseXml
     }
 
     // Accounting[Supplier|Customer]Party helper
-    protected function xmlParty($who)
+    protected function xmlParty(string $who)
     {
         $node = $this->doc->createElement('cac:Party');
         $prop = explode(' ', $who . '_' . implode(' ' . $who . '_', explode(' ', 'eas_code vat_id tax_code')));
@@ -182,7 +182,7 @@ class Ublv24Xml extends BaseXml
     }
 
     // xmlParty helper
-    protected function xmlPartyTaxScheme($who)
+    protected function xmlPartyTaxScheme(string $who)
     {
         $node = $this->doc->createElement('cac:PartyTaxScheme');
         $prop = $who . '_vat_id';
@@ -199,11 +199,11 @@ class Ublv24Xml extends BaseXml
     }
 
     // xmlParty helper
-    protected function xmlPartyLegalEntity($who, $id, $schemeID)
+    protected function xmlPartyLegalEntity(string $who, $id, $schemeID)
     {
         $prop = explode(' ', $who . '_' . implode(' ' . $who . '_', explode(' ', 'company name')));
         $node = $this->doc->createElement('cac:PartyLegalEntity');
-        $name = $this->invoice->{$prop[0]} ? $this->invoice->{$prop[0]} : $this->invoice->{$prop[1]}; // *_company (Or *_name if empty)
+        $name = $this->invoice->{$prop[0]} ?: $this->invoice->{$prop[1]}; // *_company (Or *_name if empty)
         $nodeName = $this->doc->createElement('cbc:RegistrationName', $name);
         $node->appendChild($nodeName);
 
@@ -237,18 +237,18 @@ class Ublv24Xml extends BaseXml
     }
 
     // xmlParty helper
-    protected function xmlPartyName($who)
+    protected function xmlPartyName(string $who)
     {
         $prop = explode(' ', $who . '_' . implode(' ' . $who . '_', explode(' ', 'company name'))); // *_company *_name
         $node = $this->doc->createElement('cac:PartyName');
-        $nodeName = $this->doc->createElement('cbc:Name', $this->invoice->{$prop[0]} ? $this->invoice->{$prop[0]} : $this->invoice->{$prop[1]});
+        $nodeName = $this->doc->createElement('cbc:Name', $this->invoice->{$prop[0]} ?: $this->invoice->{$prop[1]});
         $node->appendChild($nodeName);
 
         return $node;
     }
 
     // xmlParty helper & optional Delivery (cac:Delivery>cac:DeliveryLocation)
-    protected function xmlAddress($who, $what = 'PostalAddress')
+    protected function xmlAddress(string $who, string $what = 'PostalAddress')
     {
         $prop = explode(' ', $who . '_' . implode(' ' . $who . '_', explode(' ', 'address_1 address_2 city zip country')));
         $node = $this->doc->createElement('cac:' . $what);
@@ -269,7 +269,7 @@ class Ublv24Xml extends BaseXml
     }
 
     // xmlParty helper
-    protected function xmlContact($who)
+    protected function xmlContact(string $who)
     {
         $prop = explode(' ', $who . '_' . implode(' ' . $who . '_', explode(' ', 'invoicing_contact phone email')));
         $contactName  = $this->invoice->{$prop[0]}; // *_invoicing_contact;
@@ -567,7 +567,7 @@ class Ublv24Xml extends BaseXml
      */
     public function formattedDate($date, $format = 'Y-m-d')
     {
-        if (preg_match('~^\d{4}-\d{2}-\d{2}$~', $date)) {
+        if (preg_match('~^\d{4}-\d{2}-\d{2}$~', (string) $date)) {
             return $date;
         }
 

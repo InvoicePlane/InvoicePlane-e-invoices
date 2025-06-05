@@ -1,4 +1,5 @@
 <?php
+
 defined('BASEPATH') || exit('No direct script access allowed');
 /*
  * ZUGFeRD v1.0 (Historic file come from of InvoicePlane v1.4.7 to v1.6.2)

@@ -27,7 +27,7 @@ class Facturxv10Xml extends BaseXml
 
     public $minimum = false;
 
-    public function __construct($params)
+    public function __construct(array $params)
     {
         parent::__construct($params);
     }
@@ -73,12 +73,12 @@ class Facturxv10Xml extends BaseXml
         $id = 'urn:cen.eu:en16931:2017'; // KISS (confort profile)
         // Set profile variation option (XRechnung-CII / Basic / Extended / Minimum ...)
         if ( ! empty($cid = @$this->options['GuidelineSpecifiedDocumentContextParameterID'])) {
-            $id = $cid;
+            $id = (string) $cid;
             // Check & set for some profile variation
             // true when is minimum
-            $this->minimum = strpos($id, ':minimum') !== false;
+            $this->minimum = str_contains($id, ':minimum');
             // true when is minimum or basicwl (without line)
-            $this->noLineItem = $this->minimum || strpos($id, ':basicwl') !== false;
+            $this->noLineItem = $this->minimum || str_contains($id, ':basicwl');
         }
 
         $guidelineNode->appendChild($this->doc->createElement('ram:ID', $id));
@@ -173,7 +173,7 @@ class Facturxv10Xml extends BaseXml
     }
 
     // xml(Seller|Buyer)TradeParty helper
-    protected function xmlTradeParty(&$node, $who)
+    protected function xmlTradeParty(&$node, string $who)
     {
         // Make array of user|client* properties
         $prop = explode(' ', $who . '_' . implode(' ' . $who . '_', explode(' ', 'id name zip address_1 address_2 city country vat_id tax_code eas_code')));
@@ -208,7 +208,7 @@ class Facturxv10Xml extends BaseXml
             $ciiNode->appendChild($this->doc->createElement('ram:PersonName', $this->invoice->{$ciip[0]})); // *_invoicing_contact
             // Phone
             $telNode = $this->doc->createElement('ram:TelephoneUniversalCommunication');
-            $tel = $this->invoice->{$ciip[1]} ? $this->invoice->{$ciip[1]} : $this->invoice->{$ciip[2]}; // *_phone or *_mobile
+            $tel = $this->invoice->{$ciip[1]} ?: $this->invoice->{$ciip[2]}; // *_phone or *_mobile
             $telNode->appendChild($this->doc->createElement('ram:CompleteNumber', $tel));
             $ciiNode->appendChild($telNode);
             // E-mail
@@ -439,14 +439,14 @@ class Facturxv10Xml extends BaseXml
     /**
      * @param string $name
      * @param number $amount
-     * @param bool   $add_code
+     * @param bool $addCode
      *
      * return node
      */
-    protected function currencyElement($name, $amount, $add_code = false)
+    protected function currencyElement($name, $amount, $addCode = false)
     {
         $el = $this->doc->createElement($name, $this->formattedFloat($amount, $this->decimal_places));
-        if ($add_code) {
+        if ($addCode) {
             $el->setAttribute('currencyID', $this->currencyCode);
         }
 
@@ -529,6 +529,7 @@ class Facturxv10Xml extends BaseXml
         if ($item->item_description) {
             $tradeNode->appendChild($this->doc->createElement('ram:Description', htmlsc($item->item_description)));
         }
+
         $node->appendChild($tradeNode);
 
         // SpecifiedLineTradeAgreement
@@ -590,9 +591,8 @@ class Facturxv10Xml extends BaseXml
 
     /**
      * @param string $name
-     * @param mixed  $quantity
      */
-    protected function quantityElement($name, $quantity)
+    protected function quantityElement($name, mixed $quantity)
     {
         $el = $this->doc->createElement($name, $this->formattedFloat($quantity, $this->item_decimals));
         $el->setAttribute('unitCode', 'C62');
