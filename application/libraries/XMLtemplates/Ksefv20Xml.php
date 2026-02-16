@@ -290,7 +290,7 @@ class Ksefv20Xml
                 $item_identifiers = array_map(function ($item) {
                     return !empty($item['name']) ? $item['name'] : $item['code'];
                 }, $unsupported_items);
-                
+
                 log_message('warning', sprintf(
                     'KSeF XML: Items with unsupported VAT rates detected for PL buyer. ' .
                     'Rates: [%s], Total net: %s, Total tax: %s, Items: [%s]',
@@ -367,9 +367,9 @@ class Ksefv20Xml
                 $p7_value = '';
                 if (!empty($name)) {
                     $p7_value = $name;
-                } else if (!empty($description)) {
+                } elseif (!empty($description)) {
                     $p7_value = $description;
-                } else if (!empty($item->item_code ?? '')) {
+                } elseif (!empty($item->item_code)) {
                     $p7_value = $item->item_code;
                 } else {
                     $p7_value = 'Brak nazwy';
