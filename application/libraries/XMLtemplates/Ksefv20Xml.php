@@ -651,7 +651,7 @@ class Ksefv20Xml
     {
         if ($date_string) {
             $date = DateTime::createFromFormat('Y-m-d', $date_string);
-            return $date->format($format);
+            return $date ? $date->format($format) : '';
         }
         return '';
     }
