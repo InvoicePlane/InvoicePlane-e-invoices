@@ -354,7 +354,7 @@ class Ksefv20Xml
     protected function get_invoice_payment()
     {
         $due_date = $this->invoice->invoice_date_due;
-        $payment_method = strtolower($this->invoice->payment_method_name);
+        $payment_method = strtolower((string) ($this->invoice->payment_method_name ?? ''));
         $iban = str_replace(' ', '', $this->invoice->user_iban);
         $bic = $this->invoice->user_bic;
         $bank_name = $this->invoice->user_bank;
