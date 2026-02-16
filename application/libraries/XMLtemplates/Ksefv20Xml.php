@@ -151,9 +151,18 @@ class Ksefv20Xml
                 'Nazwa' => $name
             ];
         } else if ($this->is_eu_buyer()) {
-            $vat_without_country = str_replace($country, '', $vat);
+            // Normalize country code and VAT ID, then remove only a leading country prefix (case-insensitive).
+            $country_code = strtoupper(trim($country));
+            $normalized_vat = strtoupper(preg_replace('/\s+/', '', $vat));
+
+            if ($country_code !== '' && stripos($normalized_vat, $country_code) === 0) {
+                $vat_without_country = substr($normalized_vat, strlen($country_code));
+            } else {
+                $vat_without_country = $normalized_vat;
+            }
+
             $id_data = [
-                'KodUE' => $country,
+                'KodUE' => $country_code,
                 'NrVatUE' => $vat_without_country,
                 'Nazwa' => $name
             ];
