@@ -256,6 +256,9 @@ class Ksefv20Xml
             $first_reduced_tax_total = 0;
             $second_reduced_net_total = 0;
             $second_reduced_tax_total = 0;
+            $unsupported_items = [];
+            $unsupported_net_total = 0;
+            $unsupported_tax_total = 0;
 
             foreach ($this->items as $item) {
                 if ($item->item_tax_rate_percent == 23 || $item->item_tax_rate_percent == 22) {
@@ -268,10 +271,34 @@ class Ksefv20Xml
                     $second_reduced_net_total += $item->item_subtotal;
                     $second_reduced_tax_total += $item->item_tax_total;
                 } else {
-                    throw new InvalidArgumentException(
-                        'Unsupported VAT rate for PL buyer in KSeF XML generation: ' . $item->item_tax_rate_percent
-                    );
+                    // Accumulate items with unsupported VAT rates
+                    $unsupported_net_total += $item->item_subtotal;
+                    $unsupported_tax_total += $item->item_tax_total;
+                    $unsupported_items[] = [
+                        'rate' => $item->item_tax_rate_percent,
+                        'name' => $item->item_name ?? '',
+                        'code' => $item->item_code ?? '',
+                        'net' => $item->item_subtotal,
+                        'tax' => $item->item_tax_total,
+                    ];
                 }
+            }
+
+            // Log warning if there are items with unsupported VAT rates
+            if (!empty($unsupported_items)) {
+                $rates = array_unique(array_column($unsupported_items, 'rate'));
+                $item_identifiers = array_map(function ($item) {
+                    return !empty($item['name']) ? $item['name'] : $item['code'];
+                }, $unsupported_items);
+                
+                log_message('warning', sprintf(
+                    'KSeF XML: Items with unsupported VAT rates detected for PL buyer. ' .
+                    'Rates: [%s], Total net: %s, Total tax: %s, Items: [%s]',
+                    implode(', ', $rates),
+                    $this->format_amount($unsupported_net_total),
+                    $this->format_amount($unsupported_tax_total),
+                    implode(', ', array_filter($item_identifiers))
+                ));
             }
 
             $net_totals = array_merge(
@@ -336,6 +363,24 @@ class Ksefv20Xml
                 $name = trim($item->item_name, " \t\n\r\0\x0B-");
                 $description = trim($item->item_description, " \t\n\r\0\x0B-");
 
+                // Three-step fallback for P_7 (item name) to ensure it's never empty
+                $p7_value = '';
+                if (!empty($name)) {
+                    $p7_value = $name;
+                } else if (!empty($description)) {
+                    $p7_value = $description;
+                } else if (!empty($item->item_code ?? '')) {
+                    $p7_value = $item->item_code;
+                } else {
+                    $p7_value = 'Brak nazwy';
+                    // Log warning when both name and description are missing
+                    log_message('warning', sprintf(
+                        'KSeF XML: Item #%d missing both name and description, using placeholder "%s"',
+                        $line_number,
+                        $p7_value
+                    ));
+                }
+
                 if ($this->is_pl_buyer()) {
                     $tax_rate = $this->format_amount($item->item_tax_rate_percent, true);
                 } else if ($this->is_eu_buyer()) {
@@ -347,7 +392,7 @@ class Ksefv20Xml
                 return array_merge(
                     [
                         'NrWierszaFa' => $line_number,
-                        'P_7' => $name ?: $description,
+                        'P_7' => $p7_value,
                         'P_8A' => 'szt.',
                         'P_8B' => $this->format_quantity($item->item_quantity),
                         'P_9A' => $this->format_amount($item->item_price),
@@ -617,7 +662,8 @@ class Ksefv20Xml
 
             // Add text value
             if (isset($value['@value'])) {
-                $element->nodeValue = htmlspecialchars($value['@value'], ENT_XML1, 'UTF-8');
+                $textNode = $this->doc->createTextNode($value['@value']);
+                $element->appendChild($textNode);
                 unset($value['@value']);
             }
 
@@ -626,7 +672,8 @@ class Ksefv20Xml
                 $this->array_to_xml($value, $element);
             }
         } else if ($value !== null && $value !== '') {
-            $element->nodeValue = htmlspecialchars($value, ENT_XML1, 'UTF-8');
+            $textNode = $this->doc->createTextNode($value);
+            $element->appendChild($textNode);
         }
 
         if ($parent) {
@@ -660,7 +707,16 @@ class Ksefv20Xml
     {
         if ($date_string) {
             $date = DateTime::createFromFormat('Y-m-d', $date_string);
-            return $date ? $date->format($format) : '';
+            if ($date === false) {
+                // Fallback: try parsing with DateTime constructor
+                try {
+                    $date = new DateTime($date_string);
+                    return $date->format($format);
+                } catch (Exception $e) {
+                    return '';
+                }
+            }
+            return $date->format($format);
         }
         return '';
     }
