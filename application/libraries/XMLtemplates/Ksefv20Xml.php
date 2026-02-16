@@ -258,6 +258,10 @@ class Ksefv20Xml
                 } else if ($item->item_tax_rate_percent == 5) {
                     $second_reduced_net_total += $item->item_subtotal;
                     $second_reduced_tax_total += $item->item_tax_total;
+                } else {
+                    throw new InvalidArgumentException(
+                        'Unsupported VAT rate for PL buyer in KSeF XML generation: ' . $item->item_tax_rate_percent
+                    );
                 }
             }
 
