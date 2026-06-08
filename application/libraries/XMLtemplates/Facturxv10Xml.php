@@ -70,7 +70,7 @@ class Facturxv10Xml extends BaseXml
         $guidelineNode = $this->doc->createElement('ram:GuidelineSpecifiedDocumentContextParameter');
         // urn:cen.eu:en16931:2017#compliant#urn:(zugferd | factur-x.eu):1p0:(basic | en16931) ::: en16931 = COMFORT (profil)
         // urn:cen.eu:en16931:2017#conformant#urn:(zugferd | factur-x.eu):1p0:extended
-        $id = 'urn:cen.eu:en16931:2017'; // KISS (confort profile)
+        $id = 'urn:cen.eu:en16931:2017'; // KISS (comfort profile)
         // Set profile variation option (XRechnung-CII / Basic / Extended / Minimum ...)
         if ( ! empty($cid = @$this->options['GuidelineSpecifiedDocumentContextParameterID'])) {
             $id = (string) $cid;
