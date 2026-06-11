@@ -10,6 +10,6 @@ $xml_setting = [
     'XMLname'     => 'factur-x.xml', // The name of file embedded in PDF
     'generator'   => 'Facturxv10', // Use the libraries/XMLtemplates/Facturxv10Xml.php
     'options'     => [
-        'GuidelineSpecifiedDocumentContextParameterID' => 'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended',
+        'GuidelineSpecifiedDocumentContextParameterID' => 'urn:cen.eu:en16931:2017',
     ],
 ];
