@@ -166,6 +166,14 @@ class Facturxv10Xml extends BaseXml
 
         $node = $this->doc->createElement('ram:SpecifiedTradePaymentTerms');
         $node->appendChild($this->doc->createElement('ram:Description', $PaymentTerms));
+
+        // Machine-readable due date (BT-9). Must follow ram:Description per the CII schema.
+        if (! empty($this->invoice->invoice_date_due)) {
+            $dueDateNode = $this->doc->createElement('ram:DueDateDateTime');
+            $dueDateNode->appendChild($this->dateElement($this->invoice->invoice_date_due));
+            $node->appendChild($dueDateNode);
+        }
+
         return $node;
     }
 
