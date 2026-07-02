@@ -32,6 +32,16 @@ class Facturxv10Xml extends BaseXml
         parent::__construct($params);
     }
 
+    protected function cleanedSiren($value): string
+    {
+        return preg_replace('/\D/', '', (string) ($value ?? ''));
+    }
+
+    protected function invoiceReference(): string
+    {
+        // French BR-FR-02 allows alphanumeric characters and + - _ / only.
+        return preg_replace('/[^A-Za-z0-9+_\/-]/', '-', (string) $this->invoice->invoice_number);
+    }
     public function xml(): void
     {
         parent::xml();
@@ -74,6 +84,11 @@ class Facturxv10Xml extends BaseXml
         // Set profile variation option (XRechnung-CII / Basic / Extended / Minimum ...)
         if ( ! empty($cid = @$this->options['GuidelineSpecifiedDocumentContextParameterID'])) {
             $id = (string) $cid;
+            // BR-FR / EN16931 validation rejects the historical Factur-X EXTENDED URN here.
+            // Keep EN16931 for French PDP compatibility.
+            if ($id === 'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended') {
+                $id = 'urn:cen.eu:en16931:2017';
+            }
             // Check & set for some profile variation
             // true when is minimum
             $this->minimum = str_contains($id, ':minimum');
@@ -91,7 +106,7 @@ class Facturxv10Xml extends BaseXml
     {
         $node = $this->doc->createElement('rsm:ExchangedDocument');
 
-        $node->appendChild($this->doc->createElement('ram:ID', $this->invoice->invoice_number));
+        $node->appendChild($this->doc->createElement('ram:ID', $this->invoiceReference()));
         $node->appendChild($this->doc->createElement('ram:TypeCode', 380));
 
         // IssueDateTime
@@ -99,6 +114,18 @@ class Facturxv10Xml extends BaseXml
         $dateNode->appendChild($this->dateElement($this->invoice->invoice_date_created));
 
         $node->appendChild($dateNode);
+        // Mandatory French legal notes for PDP / XP Z12-012 checks (BG-3 / BT-22).
+        $notes = [
+            'PMT' => 'Indemnité forfaitaire pour frais de recouvrement : 40 EUR',
+            'PMD' => 'Pénalités de retard exigibles en cas de paiement après l’échéance.',
+            'AAB' => 'Aucun escompte accordé pour paiement anticipé.',
+        ];
+        foreach ($notes as $subjectCode => $content) {
+            $noteNode = $this->doc->createElement('ram:IncludedNote');
+            $noteNode->appendChild($this->doc->createElement('ram:Content', $content));
+            $noteNode->appendChild($this->doc->createElement('ram:SubjectCode', $subjectCode));
+            $node->appendChild($noteNode);
+        }
 
         return $node;
     }
@@ -177,23 +204,26 @@ class Facturxv10Xml extends BaseXml
     {
         // Make array of user|client* properties
         $prop = explode(' ', $who . '_' . implode(' ' . $who . '_', explode(' ', 'id name zip address_1 address_2 city country vat_id tax_code eas_code')));
-        // Not for MINIMUM profile : Name is expected
+        // French PDP compatibility: use SIREN for the seller identifier (BT-30).
+        // The seller SIREN is stored in user_siren.
         if (empty($this->minimum) && $who == 'user') {
-            $node->appendChild($this->doc->createElement('ram:ID', $this->invoice->{$prop[0]})); // *_id zugferd 2 : SELLER123
+            $sellerSiren = $this->cleanedSiren($this->invoice->user_siren ?? '');
+            $node->appendChild($this->doc->createElement('ram:ID', $sellerSiren));
         }
 
         $node->appendChild($this->doc->createElement('ram:Name', htmlsc($this->invoice->{$prop[1]}))); // *_name
 
-        // SpecifiedLegalOrganization XRechnung-CII-validation + (minimum profile : need for user if $this->notax)
-        if ( ! empty($this->options[$prop[9]])) { // *_eas_code
-            // Required when "No subject to VAT" for minimum profile (Factur-X/Zugferd2.3).
-            // Note: is valid with VAT but not required
-            // Only for MINIMUM profile : ram:SpecifiedLegalOrganization is expected for seller (user) only
+        // SpecifiedLegalOrganization
+        // For France, FactPulse / XP Z12-012 expects seller SIREN in BT-30: exactly 9 digits.
+        if ($who == 'user') {
             $sloNode = $this->doc->createElement('ram:SpecifiedLegalOrganization');
-            // user_tax_code Tax code (SIREN/SIRET) (national identification number)
+            $idNode  = $this->doc->createElement('ram:ID', $this->cleanedSiren($this->invoice->user_siren ?? ''));
+            $idNode->setAttribute('schemeID', '0002');
+            $sloNode->appendChild($idNode);
+            $node->appendChild($sloNode);
+        } elseif ( ! empty($this->options[$prop[9]])) { // *_eas_code
+            $sloNode = $this->doc->createElement('ram:SpecifiedLegalOrganization');
             $idNode  = $this->doc->createElement('ram:ID', $this->invoice->{$prop[8]}); // *_tax_code
-            // Like EAS code. Note perplexity suggest to use FR:SIRET or FR:SIREN but unvalid with ecosio
-            // EAS code for schemeID (Electronic Address Scheme) : https://ec.europa.eu/digital-building-blocks/sites/display/DIGITAL/Code+lists
             $idNode->setAttribute('schemeID', $this->options[$prop[9]]); // *_eas_code
             $sloNode->appendChild($idNode);
             $node->appendChild($sloNode);
@@ -238,33 +268,21 @@ class Facturxv10Xml extends BaseXml
             $node->appendChild($addressNode);
         }
 
-        // XRechnung-CII-validation : URIUniversalCommunication > URIID : schemeID
-        if ( ! empty($this->options['URIUniversalCommunication'])) {
-            // ram:[Buyer|Seller]TradeParty/ram:URIUniversalCommunication/ram:URIID
-            $uriNode = $this->doc->createElement('ram:URIUniversalCommunication');
-            // E-mail by default
-            $uriID = $who . '_email'; // *_email
-            $schemeID = 'EM';
-            $opt = $this->options['URIUniversalCommunication'];
-            // Check & set from options
-            if ( ! empty($tmp = $opt[$who])) {
-                // user|client[_vat_id|tax_code] (from db in $this->invoice->*)
-                if ( ! empty($tmp['URIID'])) {
-                    $uriID = $tmp['URIID'];
-                }
-
-                // From configXml option
-                if ( ! empty($tmp['schemeID'])) {
-                    $schemeID = $tmp['schemeID'];
-                }
-            }
-
-            $idNode = $this->doc->createElement('ram:URIID', $this->invoice->{$uriID});
-            // [BR-CL-25]-Endpoint identifier scheme identifier MUST belong to the CEF EAS code list
-            $idNode->setAttribute('schemeID', $schemeID);
-            $uriNode->appendChild($idNode);
-            $node->appendChild($uriNode);
+        // French PDP routing identifiers:
+        // - BT-34 seller electronic address: user_siren, schemeID 0002 (SIREN)
+        // - BT-49 buyer electronic address: client_company, schemeID 0002 (SIREN)
+        $electronicAddress = '';
+        if ($who == 'user') {
+            $electronicAddress = $this->cleanedSiren($this->invoice->user_siren ?? '');
+        } elseif ($who == 'client') {
+            $electronicAddress = $this->cleanedSiren($this->invoice->client_company ?? '');
         }
+
+        $uriNode = $this->doc->createElement('ram:URIUniversalCommunication');
+        $idNode = $this->doc->createElement('ram:URIID', $electronicAddress);
+        $idNode->setAttribute('schemeID', '0002');
+        $uriNode->appendChild($idNode);
+        $node->appendChild($uriNode);
 
         // SpecifiedTaxRegistration
         // Note for MINIMUM profile : ram:SpecifiedTaxRegistration is only expected for seller (user)
@@ -311,7 +329,7 @@ class Facturxv10Xml extends BaseXml
         $node = $this->doc->createElement('ram:ApplicableHeaderTradeSettlement');
         if (empty($this->minimum)) {
             // Not for MINIMUM profile : InvoiceCurrencyCode is expected
-            $node->appendChild($this->doc->createElement('ram:PaymentReference', $this->invoice->invoice_number));
+            $node->appendChild($this->doc->createElement('ram:PaymentReference', $this->invoiceReference()));
         }
 
         $node->appendChild($this->doc->createElement('ram:InvoiceCurrencyCode', $this->currencyCode));
@@ -319,7 +337,10 @@ class Facturxv10Xml extends BaseXml
         if (empty($this->minimum)) {
             // Not for MINIMUM profile : SpecifiedTradeSettlementHeaderMonetarySummation is expected
             // bank
-            $node->appendChild($this->xmlSpecifiedTradeSettlementPaymentMeans());
+            $paymentMeansNode = $this->xmlSpecifiedTradeSettlementPaymentMeans();
+            if ($paymentMeansNode !== null) {
+                $node->appendChild($paymentMeansNode);
+            }
 
             // taxes
             if( ! $this->notax) { // hard? todo? legacy_calculation: like if have discounts (how to find item(s) with amount > of amount discount to get/dispatch % of global VAT's
@@ -459,16 +480,24 @@ class Facturxv10Xml extends BaseXml
 
     protected function xmlSpecifiedTradeSettlementPaymentMeans()
     {
+        $iban = trim((string) ($this->invoice->user_iban ?? ''));
+	$bankAccount = trim((string) ($this->invoice->user_bank ?? ''));
         $node = $this->doc->createElement('ram:SpecifiedTradeSettlementPaymentMeans');
 
         $node->appendChild($this->doc->createElement('ram:TypeCode', '30'));
 
         // PayeePartyCreditorFinancialAccount
-        $payeeNode = $this->doc->createElement('ram:PayeePartyCreditorFinancialAccount');
-        $payeeNode->appendChild($this->doc->createElement('ram:IBANID', $this->invoice->user_iban));
-        // LOC BANK ACCOUNT (Document should not contain empty elements.)
-        if ($this->invoice->user_bank) {
-            $payeeNode->appendChild($this->doc->createElement('ram:ProprietaryID', $this->invoice->user_bank));
+        if ($iban === '' && $bankAccount === '') {
+            // Do not generate BG-16 at all when BT-84 is missing.
+            // If TypeCode 30 is present without IBANID/ProprietaryID, EN16931 BR-50/BR-61 fails.
+            return null;
+        }
+	$payeeNode = $this->doc->createElement('ram:PayeePartyCreditorFinancialAccount');
+        if ($iban !== '') {
+            $payeeNode->appendChild($this->doc->createElement('ram:IBANID', $iban));
+        } else {
+            // Use ProprietaryID only when no IBAN is available. BR-CO-27 forbids both at the same time.
+            $payeeNode->appendChild($this->doc->createElement('ram:ProprietaryID', $bankAccount));
         }
 
         $node->appendChild($payeeNode);
