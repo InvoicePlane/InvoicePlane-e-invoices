@@ -294,9 +294,10 @@ class Facturxv10Xml extends BaseXml
 
         // SpecifiedTaxRegistration
         // Note for MINIMUM profile : ram:SpecifiedTaxRegistration is only expected for seller (user)
-        if ((empty($this->minimum) || $who == 'user') && ! $this->notax) {
-            $node->appendChild($this->xmlSpecifiedTaxRegistration('VA', $this->invoice->{$prop[7]}));
-            // *_vat_id zugferd 2
+        // An empty ram:ID breaks EN 16931 BR-CO-9, and the buyer's VAT identifier (BT-48) is optional.
+        $vatId = trim((string) ($this->invoice->{$prop[7]} ?? '')); // *_vat_id zugferd 2
+        if ((empty($this->minimum) || $who == 'user') && ! $this->notax && $vatId !== '') {
+            $node->appendChild($this->xmlSpecifiedTaxRegistration('VA', $vatId));
         }
     }
 
