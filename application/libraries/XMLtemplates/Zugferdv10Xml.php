@@ -211,8 +211,16 @@ class Zugferdv10Xml
         $node->appendChild($addressNode);
 
         // SpecifiedTaxRegistration
-        $node->appendChild($this->xmlSpecifiedTaxRegistration('VA', $this->invoice->client_vat_id));
-        $node->appendChild($this->xmlSpecifiedTaxRegistration('FC', htmlsc($this->invoice->client_tax_code)));
+        // Both identifiers are optional for the buyer; an empty ram:ID makes the invoice invalid.
+        $vatId = trim((string) ($this->invoice->client_vat_id ?? ''));
+        if ($vatId !== '') {
+            $node->appendChild($this->xmlSpecifiedTaxRegistration('VA', $vatId));
+        }
+
+        $taxCode = trim((string) ($this->invoice->client_tax_code ?? ''));
+        if ($taxCode !== '') {
+            $node->appendChild($this->xmlSpecifiedTaxRegistration('FC', htmlsc($taxCode)));
+        }
 
         return $node;
     }
